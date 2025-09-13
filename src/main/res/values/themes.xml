@@ -26,6 +26,40 @@
         <item name="windowNoTitle">true</item>
     </style>
     
+    <!-- 对话框样式 -->
+    <style name="AlertDialogTheme" parent="ThemeOverlay.Material3.MaterialAlertDialog">
+        <item name="colorSurface">@color/surface_dark</item>
+        <item name="colorOnSurface">@color/text_primary_dark</item>
+        <item name="android:textColorPrimary">@color/text_primary_dark</item>
+        <item name="android:textColorSecondary">@color/text_secondary_dark</item>
+        <item name="colorPrimary">@color/primary</item>
+        <item name="android:windowBackground">@color/surface_dark</item>
+        <item name="materialAlertDialogTitleTextStyle">@style/AlertDialogTitleStyle</item>
+        <item name="materialAlertDialogBodyTextStyle">@style/AlertDialogBodyStyle</item>
+        <item name="buttonBarPositiveButtonStyle">@style/AlertDialogButtonStyle</item>
+        <item name="buttonBarNegativeButtonStyle">@style/AlertDialogButtonStyle</item>
+        <item name="buttonBarNeutralButtonStyle">@style/AlertDialogButtonStyle</item>
+    </style>
+    
+    <style name="AlertDialogTitleStyle" parent="MaterialAlertDialog.Material3.Title.Text">
+        <item name="android:textColor">@color/text_primary_dark</item>
+        <item name="android:textSize">20sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+    
+    <style name="AlertDialogBodyStyle" parent="MaterialAlertDialog.Material3.Body.Text">
+        <item name="android:textColor">@color/text_primary_dark</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:lineSpacingExtra">2dp</item>
+    </style>
+    
+    <style name="AlertDialogButtonStyle" parent="Widget.Material3.Button.TextButton.Dialog">
+        <item name="android:textColor">@color/primary</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="rippleColor">@color/primary_light</item>
+    </style>
+    
     <!-- 登录界面样式 -->
     <style name="LoginInputStyle">
         <item name="android:layout_width">match_parent</item>

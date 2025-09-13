@@ -5,8 +5,10 @@ import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
+import android.provider.Settings
 import android.view.View
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -56,7 +58,18 @@ class MainActivity : AppCompatActivity() {
         if (isGranted) {
             openImagePicker()
         } else {
-            Toast.makeText(this, "需要存储权限才能发送图片", Toast.LENGTH_SHORT).show()
+            showPermissionDeniedDialog()
+        }
+    }
+
+    private val multiplePermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val allGranted = permissions.values.all { it }
+        if (allGranted) {
+            openImagePicker()
+        } else {
+            showPermissionDeniedDialog()
         }
     }
 
@@ -75,6 +88,7 @@ class MainActivity : AppCompatActivity() {
 
         setupUI()
         setupClickListeners()
+        setupChatClientListener()
         startMessageListener()
     }
 
@@ -104,6 +118,51 @@ class MainActivity : AppCompatActivity() {
         
         // 初始化图片缓存管理器
         imageCacheManager = ImageCacheManager(this)
+    }
+
+    private fun setupChatClientListener() {
+        chatClient.setListener(object : ChatClient.ChatClientListener {
+            override fun onConnected() {
+                // 连接成功处理
+            }
+
+            override fun onDisconnected() {
+                // 断开连接处理
+            }
+
+            override fun onMessageReceived(message: com.intplatinum.mv.data.Message) {
+                // 处理用户列表消息
+                if (message.type == "user_list") {
+                    try {
+                        val gson = com.google.gson.Gson()
+                        val userListType = object : com.google.gson.reflect.TypeToken<List<String>>() {}.type
+                        val userList: List<String> = gson.fromJson(message.content, userListType)
+                        
+                        runOnUiThread {
+                            val userInfoList = userList.map { username ->
+                                UserInfo(username)
+                            }
+                            userAdapter.updateUsers(userInfoList)
+                            updateUserListTitle()
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
+
+            override fun onError(error: String) {
+                runOnUiThread {
+                    Toast.makeText(this@MainActivity, "连接错误: $error", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            override fun onVersionMismatch(requiredVersion: String) {
+                runOnUiThread {
+                    Toast.makeText(this@MainActivity, "版本不匹配，需要版本: $requiredVersion", Toast.LENGTH_LONG).show()
+                }
+            }
+        })
     }
 
     private fun setupClickListeners() {
@@ -181,14 +240,89 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkPermissionAndOpenImagePicker() {
-        if (ContextCompat.checkSelfPermission(
+        // 首次点击时显示权限说明对话框
+        if (!hasRequestedPermissionBefore()) {
+            showPermissionExplanationDialog()
+            return
+        }
+        
+        // 检查权限并请求
+        if (hasImagePermission()) {
+            openImagePicker()
+        } else {
+            requestImagePermission()
+        }
+    }
+    
+    private fun hasImagePermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // Android 13+ 使用 READ_MEDIA_IMAGES
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.READ_MEDIA_IMAGES
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            // Android 12 及以下使用 READ_EXTERNAL_STORAGE
+            ContextCompat.checkSelfPermission(
                 this,
                 Manifest.permission.READ_EXTERNAL_STORAGE
             ) == PackageManager.PERMISSION_GRANTED
-        ) {
-            openImagePicker()
+        }
+    }
+    
+    private fun requestImagePermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // Android 13+ 请求 READ_MEDIA_IMAGES
+            permissionLauncher.launch(Manifest.permission.READ_MEDIA_IMAGES)
         } else {
+            // Android 12 及以下请求 READ_EXTERNAL_STORAGE
             permissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+    }
+    
+    private fun hasRequestedPermissionBefore(): Boolean {
+        val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
+        return prefs.getBoolean("has_requested_image_permission", false)
+    }
+    
+    private fun setPermissionRequested() {
+        val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
+        prefs.edit().putBoolean("has_requested_image_permission", true).apply()
+    }
+    
+    private fun showPermissionExplanationDialog() {
+        AlertDialog.Builder(this, R.style.AlertDialogTheme)
+            .setTitle("图片发送权限")
+            .setMessage("为了发送图片，应用需要访问您的相册。请在下一步中允许访问权限。")
+            .setPositiveButton("继续") { _, _ ->
+                setPermissionRequested()
+                requestImagePermission()
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+    
+    private fun showPermissionDeniedDialog() {
+        AlertDialog.Builder(this, R.style.AlertDialogTheme)
+            .setTitle("权限被拒绝")
+            .setMessage("无法发送图片，因为没有访问相册的权限。您可以：\n\n1. 重新授权\n2. 前往系统设置手动开启权限")
+            .setPositiveButton("重新授权") { _, _ ->
+                requestImagePermission()
+            }
+            .setNegativeButton("前往设置") { _, _ ->
+                openAppSettings()
+            }
+            .setNeutralButton("取消", null)
+            .show()
+    }
+    
+    private fun openAppSettings() {
+        try {
+            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+            intent.data = Uri.fromParts("package", packageName, null)
+            startActivity(intent)
+        } catch (e: Exception) {
+            Toast.makeText(this, "无法打开设置页面", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -325,7 +459,7 @@ class MainActivity : AppCompatActivity() {
                 "使用率: ${String.format("%.1f", cacheInfo.getUsagePercentage())}%\n" +
                 "最大大小: ${String.format("%.0f", cacheInfo.getMaxSizeMB())} MB"
         
-        AlertDialog.Builder(this)
+        AlertDialog.Builder(this, R.style.AlertDialogTheme)
             .setTitle("缓存管理")
             .setMessage(message)
             .setPositiveButton("清理过期缓存") { _, _ ->
@@ -335,7 +469,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             .setNegativeButton("清理所有缓存") { _, _ ->
-                AlertDialog.Builder(this)
+                AlertDialog.Builder(this, R.style.AlertDialogTheme)
                     .setTitle("确认清理")
                     .setMessage("确定要清理所有图片缓存吗？这将删除所有已下载的图片。")
                     .setPositiveButton("确定") { _, _ ->

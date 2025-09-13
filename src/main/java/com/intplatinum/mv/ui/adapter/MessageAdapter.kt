@@ -57,11 +57,11 @@ class MessageAdapter(
             val fileName = "ChatImage_${System.currentTimeMillis()}.jpg"
             
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                // Android 10及以上使用MediaStore API
+                // Android 10及以上使用MediaStore API，保存到DCIM目录
                 val contentValues = ContentValues().apply {
                     put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
                     put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-                    put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES)
+                    put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_DCIM + "/ChatImages")
                 }
                 
                 val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
@@ -76,9 +76,13 @@ class MessageAdapter(
                     Toast.makeText(context, "保存失败", Toast.LENGTH_SHORT).show()
                 }
             } else {
-                // Android 9及以下直接保存到Pictures目录
-                val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
-                val destFile = File(picturesDir, fileName)
+                // Android 9及以下直接保存到DCIM目录
+                val dcimDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM)
+                val chatImagesDir = File(dcimDir, "ChatImages")
+                if (!chatImagesDir.exists()) {
+                    chatImagesDir.mkdirs()
+                }
+                val destFile = File(chatImagesDir, fileName)
                 
                 FileInputStream(sourceFile).use { inputStream ->
                     destFile.outputStream().use { outputStream ->

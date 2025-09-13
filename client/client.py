@@ -32,7 +32,7 @@ class ChatClient(QThread):
     version_mismatch = pyqtSignal(str)
     
     # 定义客户端版本
-    CLIENT_VERSION = "v1.0.1a"
+    CLIENT_VERSION = "v1.0.1b"
     
     def __init__(self, host, port, username):
         super().__init__()
@@ -89,7 +89,11 @@ class ChatClient(QThread):
     def connect_to_server(self):
         try:
             self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            # 设置连接超时为10秒
+            self.client_socket.settimeout(10.0)
             self.client_socket.connect((self.host, self.port))
+            # 连接成功后设置接收超时为30秒
+            self.client_socket.settimeout(30.0)
             
             # 发送版本信息，使用base64加密版本号
             encrypted_version = base64.b64encode(self.CLIENT_VERSION.encode('utf-8')).decode('utf-8')
@@ -188,6 +192,15 @@ class ChatClient(QThread):
                 self.connection_error.emit("未知的服务器响应")
                 self.client_socket.close()
                 return False
+        except socket.timeout:
+            self.connection_error.emit("连接超时，请检查网络连接和服务器状态")
+            return False
+        except ConnectionRefusedError:
+            self.connection_error.emit("连接被拒绝，请检查服务器地址和端口是否正确")
+            return False
+        except socket.gaierror:
+            self.connection_error.emit("无法解析服务器地址，请检查网络连接")
+            return False
         except Exception as e:
             self.connection_error.emit(f"连接服务器失败: {e}")
             return False
@@ -465,21 +478,6 @@ class ChatWindow(QMainWindow):
         # 初始化配置管理器
         self.config_manager = ConfigManager()
         
-        # 加载保存的配置
-        saved_host, saved_port = self.config_manager.get_server_info()
-        saved_username = self.config_manager.get_username()
-        
-        # 获取服务器信息，使用保存的配置作为默认值
-        server_dialog = ServerInfoDialog(self)
-        # 格式化保存的配置为合并格式
-        formatted_host = f"{saved_host}:{saved_port}" if saved_host else "localhost:9999"
-        server_dialog.host_input.setText(formatted_host)
-        
-        if server_dialog.exec_() != QDialog.Accepted:
-            sys.exit(0)
-            
-        self.server_host, self.server_port = server_dialog.get_server_info()
-        
         # 初始化UI
         self.init_ui()
         
@@ -489,50 +487,125 @@ class ChatWindow(QMainWindow):
         # 记录上次发送消息的时间，初始为0
         self.last_message_time = 0
         
-        # 然后循环获取昵称直到成功
+        # 初始化客户端连接相关变量
+        self.client = None
+        self.username = None
+        self.server_host = None
+        self.server_port = None
+        
+        # 设置初始窗口标题
+        self.setWindowTitle("intPlatinum - 连接中...")
+        
+    def start_connection_process(self):
+        """开始连接流程，这个方法在窗口显示后调用"""
+        # 加载保存的配置
+        saved_host, saved_port = self.config_manager.get_server_info()
+        saved_username = self.config_manager.get_username()
+        
+        # 获取服务器信息，使用保存的配置作为默认值
+        server_dialog = ServerInfoDialog(self)
+        # 格式化保存的配置为合并格式
+        formatted_host = f"{saved_host}:{saved_port}" if saved_host else "localhost:7995"
+        server_dialog.host_input.setText(formatted_host)
+        
+        if server_dialog.exec_() != QDialog.Accepted:
+            self.close()
+            return
+            
+        self.server_host, self.server_port = server_dialog.get_server_info()
+        
+        # 循环获取昵称并尝试连接
+        self.attempt_connection_with_nickname(saved_username)
+        
+    def attempt_connection_with_nickname(self, default_username=None):
+        """尝试获取昵称并连接服务器"""
         while True:
-            # 使用自定义的昵称输入对话框，设置保存的用户名为默认值
+            # 使用自定义的昵称输入对话框
             nickname_dialog = NicknameDialog(self)
-            if saved_username:
-                nickname_dialog.nickname_input.setText(saved_username)
+            if default_username:
+                nickname_dialog.nickname_input.setText(default_username)
+                default_username = None  # 只在第一次使用默认值
             
             if nickname_dialog.exec_() == QDialog.Accepted:
                 self.username = nickname_dialog.get_nickname()
                 if not self.username:
                     # 如果用户输入为空，显示提示
-                    msg_box = QMessageBox()
-                    msg_box.setWindowTitle("提示")
-                    msg_box.setText("昵称不能为空，请重新输入！")
-                    msg_box.setIcon(QMessageBox.Warning)
-                    msg_box.setStyleSheet("""
-                        QMessageBox { background-color: #2c2c2c; color: #ffffff; min-width: 350px; }
-                        QLabel { color: #ffffff; font-size: 14px; padding: 10px; }
-                        QPushButton { background-color: #555555; color: #ffffff; border: none; padding: 10px 20px; border-radius: 6px; font-size: 14px; min-height: 32px; }
-                        QPushButton:hover { background-color: #666666; }
-                        QPushButton:pressed { background-color: #777777; }
-                    """)
-                    msg_box.exec_()
+                    self.show_message("提示", "昵称不能为空，请重新输入！", QMessageBox.Warning)
                     continue
                 
                 # 尝试连接服务器
-                self.client = ChatClient(self.server_host, self.server_port, self.username)
-                self.client.message_received.connect(self.handle_message)
-                self.client.connection_error.connect(self.show_error)
-                self.client.version_mismatch.connect(self.show_version_error)
-                
-                # 直接调用connect_to_server方法尝试连接
-                if self.client.connect_to_server():
-                    # 连接成功，开始接收消息线程
-                    self.client.start()
+                if self.try_connect_to_server():
+                    # 连接成功
+                    self.setWindowTitle(f"intPlatinum - {self.username}")
                     # 保存当前配置
                     self.config_manager.save_config(self.server_host, self.server_port, self.username)
                     break
-                # 连接失败会通过signal显示错误，继续循环
+                else:
+                    # 连接失败，询问用户是否重试
+                    if not self.ask_retry_connection():
+                        self.close()
+                        return
             else:
-                sys.exit(0)
+                self.close()
+                return
+                
+    def try_connect_to_server(self):
+        """尝试连接到服务器，返回连接是否成功"""
+        try:
+            self.client = ChatClient(self.server_host, self.server_port, self.username)
+            self.client.message_received.connect(self.handle_message)
+            self.client.connection_error.connect(self.handle_connection_error)
+            self.client.version_mismatch.connect(self.show_version_error)
             
-        # 设置窗口标题
-        self.setWindowTitle(f"intPlatinum - {self.username}")
+            # 直接调用connect_to_server方法尝试连接
+            if self.client.connect_to_server():
+                # 连接成功，开始接收消息线程
+                self.client.start()
+                return True
+            else:
+                return False
+        except Exception as e:
+            self.show_message("连接错误", f"连接服务器时发生错误: {e}", QMessageBox.Critical)
+            return False
+            
+    def handle_connection_error(self, error_message):
+        """处理连接错误，不直接显示错误对话框"""
+        self.connection_error_message = error_message
+        
+    def ask_retry_connection(self):
+        """询问用户是否重试连接"""
+        error_msg = getattr(self, 'connection_error_message', '连接失败')
+        msg_box = QMessageBox()
+        msg_box.setWindowTitle("连接失败")
+        msg_box.setText(f"{error_msg}\n\n是否重试连接？")
+        msg_box.setIcon(QMessageBox.Question)
+        msg_box.setStandardButtons(QMessageBox.Retry | QMessageBox.Close)
+        msg_box.setDefaultButton(QMessageBox.Retry)
+        msg_box.setStyleSheet("""
+            QMessageBox { background-color: #2c2c2c; color: #ffffff; min-width: 350px; }
+            QLabel { color: #ffffff; font-size: 14px; padding: 10px; }
+            QPushButton { background-color: #555555; color: #ffffff; border: none; padding: 10px 20px; border-radius: 6px; font-size: 14px; min-height: 32px; }
+            QPushButton:hover { background-color: #666666; }
+            QPushButton:pressed { background-color: #777777; }
+        """)
+        
+        result = msg_box.exec_()
+        return result == QMessageBox.Retry
+        
+    def show_message(self, title, text, icon_type):
+        """显示消息对话框"""
+        msg_box = QMessageBox()
+        msg_box.setWindowTitle(title)
+        msg_box.setText(text)
+        msg_box.setIcon(icon_type)
+        msg_box.setStyleSheet("""
+            QMessageBox { background-color: #2c2c2c; color: #ffffff; min-width: 350px; }
+            QLabel { color: #ffffff; font-size: 14px; padding: 10px; }
+            QPushButton { background-color: #555555; color: #ffffff; border: none; padding: 10px 20px; border-radius: 6px; font-size: 14px; min-height: 32px; }
+            QPushButton:hover { background-color: #666666; }
+            QPushButton:pressed { background-color: #777777; }
+        """)
+        msg_box.exec_()
         
     def init_ui(self):
         # 主窗口设置
@@ -1175,4 +1248,6 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = ChatWindow()
     window.show()
+    # 窗口显示后再开始连接流程
+    window.start_connection_process()
     sys.exit(app.exec_())

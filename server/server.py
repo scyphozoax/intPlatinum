@@ -12,7 +12,7 @@ import argparse
 
 class ChatServer:
     # 定义服务器支持的客户端版本列表
-    SUPPORTED_CLIENT_VERSIONS = ["v1.0.1a", "1.0.0-mv"]
+    SUPPORTED_CLIENT_VERSIONS = ["v1.0.1a", "v1.0.1b", "1.0.0-mv","1.0.0b-mv"]
     
     def __init__(self, host='0.0.0.0', port=7995):
         self.host = host

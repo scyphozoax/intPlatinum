@@ -32,7 +32,7 @@ class ChatClient(QThread):
     version_mismatch = pyqtSignal(str)
     
     # 定义客户端版本
-    CLIENT_VERSION = "v1.0.0b"
+    CLIENT_VERSION = "v1.0.1a"
     
     def __init__(self, host, port, username):
         super().__init__()
@@ -94,7 +94,12 @@ class ChatClient(QThread):
             # 发送版本信息，使用base64加密版本号
             encrypted_version = base64.b64encode(self.CLIENT_VERSION.encode('utf-8')).decode('utf-8')
             version_data = json.dumps({'version': encrypted_version})
-            self.client_socket.sendall(version_data.encode('utf-8'))
+            version_bytes = version_data.encode('utf-8')
+            
+            # 发送4字节长度前缀 + 版本信息内容
+            length_header = struct.pack('!I', len(version_bytes))
+            self.client_socket.sendall(length_header + version_bytes)
+            print(f"已发送版本信息: {version_data} ({len(version_bytes)} bytes)")
             
             # 等待服务器版本验证响应 - 先接收4字节的消息头
             header_data = self.client_socket.recv(4)
@@ -141,7 +146,12 @@ class ChatClient(QThread):
             
             # 版本验证通过后，发送昵称
             username_data = json.dumps({'username': self.username})
-            self.client_socket.sendall(username_data.encode('utf-8'))
+            username_bytes = username_data.encode('utf-8')
+            
+            # 发送4字节长度前缀 + 用户名信息内容
+            length_header = struct.pack('!I', len(username_bytes))
+            self.client_socket.sendall(length_header + username_bytes)
+            print(f"已发送用户名信息: {username_data} ({len(username_bytes)} bytes)")
             
             # 等待服务器响应 - 先接收4字节的消息头
             header_data = self.client_socket.recv(4)
@@ -880,7 +890,8 @@ class ChatWindow(QMainWindow):
         cursor.movePosition(QTextCursor.End)
         self.chat_display.setTextCursor(cursor)
         
-        time_str = datetime.fromtimestamp(timestamp).strftime('%H:%M:%S') if timestamp else datetime.now().strftime('%H:%M:%S')
+        # 将毫秒时间戳转换为秒级时间戳
+        time_str = datetime.fromtimestamp(timestamp / 1000).strftime('%H:%M:%S') if timestamp else datetime.now().strftime('%H:%M:%S')
         
         # 设置发送者名称颜色
         sender_color = "#90EE90" if sender == self.username else "#ADD8E6"
@@ -900,7 +911,8 @@ class ChatWindow(QMainWindow):
         cursor.movePosition(QTextCursor.End)
         self.chat_display.setTextCursor(cursor)
         
-        time_str = datetime.fromtimestamp(timestamp).strftime('%H:%M:%S') if timestamp else datetime.now().strftime('%H:%M:%S')
+        # 将毫秒时间戳转换为秒级时间戳
+        time_str = datetime.fromtimestamp(timestamp / 1000).strftime('%H:%M:%S') if timestamp else datetime.now().strftime('%H:%M:%S')
         
         # 暗黑模式下设置发送者名称的颜色
         self.chat_display.setTextColor(QColor(144, 238, 144) if sender == self.username else QColor(173, 216, 230))
@@ -965,7 +977,8 @@ class ChatWindow(QMainWindow):
         cursor.movePosition(QTextCursor.End)
         self.chat_display.setTextCursor(cursor)
         
-        time_str = datetime.fromtimestamp(timestamp).strftime('%H:%M:%S') if timestamp else datetime.now().strftime('%H:%M:%S')
+        # 将毫秒时间戳转换为秒级时间戳
+        time_str = datetime.fromtimestamp(timestamp / 1000).strftime('%H:%M:%S') if timestamp else datetime.now().strftime('%H:%M:%S')
         
         # 暗黑模式下设置系统消息的颜色为橙色（更醒目）
         self.chat_display.setTextColor(QColor(255, 165, 0))

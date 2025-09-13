@@ -1,0 +1,56 @@
+<resources>
+    <string name="app_name">intPlatinum MV</string>
+    
+    <!-- 登录界面 -->
+    <string name="login_title">intPlatinum MV</string>
+    <string name="server_address">服务器地址</string>
+    <string name="server_address_hint">例如: 192.168.1.100:7995</string>
+    <string name="username">用户名</string>
+    <string name="username_hint">请输入您的昵称</string>
+    <string name="connect">连接</string>
+    <string name="connecting">连接中...</string>
+    
+    <!-- 主界面 -->
+    <string name="online_users">在线用户</string>
+    <string name="chat_room">聊天室</string>
+    <string name="type_message">输入消息...</string>
+    <string name="send">发送</string>
+    <string name="attach_file">附件</string>
+    <string name="take_photo">拍照</string>
+    <string name="select_image">选择图片</string>
+    
+    <!-- 系统消息 -->
+    <string name="user_joined">%s 加入了聊天室</string>
+    <string name="user_left">%s 离开了聊天室</string>
+    <string name="connection_lost">连接已断开</string>
+    <string name="reconnecting">重新连接中...</string>
+    
+    <!-- 错误消息 -->
+    <string name="error_connection_failed">连接服务器失败</string>
+    <string name="error_invalid_address">服务器地址格式错误</string>
+    <string name="error_username_empty">用户名不能为空</string>
+    <string name="error_username_taken">用户名已被使用</string>
+    <string name="error_version_mismatch">客户端版本不兼容，需要版本: %s</string>
+    <string name="error_send_message_failed">消息发送失败</string>
+    <string name="error_file_too_large">文件过大，无法发送</string>
+    <string name="error_permission_denied">权限被拒绝</string>
+    
+    <!-- 通用 -->
+    <string name="ok">确定</string>
+    <string name="cancel">取消</string>
+    <string name="retry">重试</string>
+    <string name="loading">加载中...</string>
+    <string name="system_message">系统消息</string>
+    
+    <!-- 用户信息 -->
+    <string name="user_info">用户信息</string>
+    <string name="user_status_online">在线</string>
+    <string name="online">在线</string>
+    <string name="user_ip_address">IP地址: %s</string>
+    
+    <!-- 文件相关 -->
+    <string name="image_sent">发送了图片</string>
+    <string name="image_received">收到图片</string>
+    <string name="file_saved">文件已保存</string>
+    <string name="save_image">保存图片</string>
+</resources>

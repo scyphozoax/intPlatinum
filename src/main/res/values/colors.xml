@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 主色调 -->
+    <color name="primary">#2E7D32</color>
+    <color name="primary_dark">#1B5E20</color>
+    <color name="primary_light">#4CAF50</color>
+    <color name="accent">#FF4081</color>
+    
+    <!-- 暗黑主题背景色 -->
+    <color name="background_dark">#1E1E1E</color>
+    <color name="surface_dark">#2C2C2C</color>
+    <color name="surface_variant_dark">#3C3C3C</color>
+    <color name="surface_light_dark">#4C4C4C</color>
+    
+    <!-- 文字颜色 -->
+    <color name="text_primary_dark">#FFFFFF</color>
+    <color name="text_secondary_dark">#B0B0B0</color>
+    <color name="text_hint_dark">#808080</color>
+    
+    <!-- 聊天相关颜色 -->
+    <color name="message_sent">#90EE90</color>
+    <color name="message_received">#ADD8E6</color>
+    <color name="message_system">#FFA500</color>
+    <color name="message_background_sent">#2E7D32</color>
+    <color name="message_background_received">#3C3C3C</color>
+    
+    <!-- 分割线和边框 -->
+    <color name="divider_dark">#555555</color>
+    <color name="border_dark">#777777</color>
+    
+    <!-- 按钮颜色 -->
+    <color name="button_primary">#2E7D32</color>
+    <color name="button_secondary">#5C5C5C</color>
+    <color name="button_pressed">#6C6C6C</color>
+    
+    <!-- 状态颜色 -->
+    <color name="online_status">#4CAF50</color>
+    <color name="offline_status">#757575</color>
+    <color name="error_color">#F44336</color>
+    <color name="warning_color">#FF9800</color>
+    
+    <!-- 透明度 -->
+    <color name="transparent">#00000000</color>
+    <color name="semi_transparent">#80000000</color>
+</resources>

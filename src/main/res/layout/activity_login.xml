@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background_dark"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="24dp">
+
+    <!-- Logo区域 -->
+    <ImageView
+        android:layout_width="120dp"
+        android:layout_height="120dp"
+        android:layout_marginBottom="32dp"
+        android:src="@drawable/ic_launcher"
+        android:contentDescription="@string/app_name" />
+
+    <!-- 应用标题 -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="48dp"
+        android:text="@string/login_title"
+        android:textColor="@color/text_primary_dark"
+        android:textSize="28sp"
+        android:textStyle="bold" />
+
+    <!-- 服务器地址输入 -->
+    <com.google.android.material.textfield.TextInputLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:hint="@string/server_address"
+        app:boxBackgroundColor="@color/surface_variant_dark"
+        app:boxBackgroundMode="filled"
+        app:boxCornerRadiusBottomEnd="8dp"
+        app:boxCornerRadiusBottomStart="8dp"
+        app:boxCornerRadiusTopEnd="8dp"
+        app:boxCornerRadiusTopStart="8dp"
+        app:boxStrokeColor="@color/divider_dark"
+        app:hintTextColor="@color/text_hint_dark">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/etServerAddress"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/server_address_hint"
+            android:inputType="textUri"
+            android:text="localhost:7995"
+            android:textColor="@color/text_primary_dark"
+            android:textColorHint="@color/text_hint_dark" />
+
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <!-- 用户名输入 -->
+    <com.google.android.material.textfield.TextInputLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="32dp"
+        android:hint="@string/username"
+        app:boxBackgroundColor="@color/surface_variant_dark"
+        app:boxBackgroundMode="filled"
+        app:boxCornerRadiusBottomEnd="8dp"
+        app:boxCornerRadiusBottomStart="8dp"
+        app:boxCornerRadiusTopEnd="8dp"
+        app:boxCornerRadiusTopStart="8dp"
+        app:boxStrokeColor="@color/divider_dark"
+        app:hintTextColor="@color/text_hint_dark">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/etUsername"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/username_hint"
+            android:inputType="text"
+            android:maxLength="20"
+            android:textColor="@color/text_primary_dark"
+            android:textColorHint="@color/text_hint_dark" />
+
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <!-- 记住设置复选框 -->
+    <CheckBox
+        android:id="@+id/cbRememberSettings"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:text="记住连接设置"
+        android:textColor="@color/text_primary_dark"
+        android:textSize="14sp"
+        android:buttonTint="@color/primary" />
+
+    <!-- 清除设置按钮 -->
+    <TextView
+        android:id="@+id/tvClearSettings"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:text="清除保存的设置"
+        android:textColor="@color/text_hint_dark"
+        android:textSize="12sp"
+        android:background="?android:attr/selectableItemBackground"
+        android:padding="8dp"
+        android:visibility="gone" />
+
+    <!-- 连接按钮 -->
+    <Button
+        android:id="@+id/btnConnect"
+        style="@style/PrimaryButtonStyle"
+        android:text="@string/connect" />
+
+    <!-- 加载指示器 -->
+    <ProgressBar
+        android:id="@+id/progressBar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:visibility="gone"
+        android:indeterminateTint="@color/primary" />
+
+    <!-- 状态文本 -->
+    <TextView
+        android:id="@+id/tvStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:textColor="@color/text_secondary_dark"
+        android:textSize="14sp"
+        android:visibility="gone" />
+
+</LinearLayout>

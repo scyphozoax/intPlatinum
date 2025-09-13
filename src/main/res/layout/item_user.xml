@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="?android:attr/selectableItemBackground"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingHorizontal="16dp"
+    android:paddingVertical="12dp">
+
+    <!-- 用户头像 -->
+    <ImageView
+        android:id="@+id/ivUserAvatar"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginEnd="12dp"
+        android:background="@drawable/button_primary_background"
+        android:contentDescription="用户头像"
+        android:padding="8dp"
+        android:src="@drawable/ic_person"
+        android:scaleType="centerInside" />
+
+    <!-- 用户信息 -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <!-- 用户名 -->
+        <TextView
+            android:id="@+id/tvUsername"
+            style="@style/UserListItemNameStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
+        <!-- 用户状态 -->
+        <TextView
+            android:id="@+id/tvUserStatus"
+            style="@style/UserListItemStatusStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="@string/online" />
+
+    </LinearLayout>
+
+    <!-- 在线状态指示器 -->
+    <View
+        android:id="@+id/viewOnlineIndicator"
+        android:layout_width="8dp"
+        android:layout_height="8dp"
+        android:background="@drawable/button_primary_background"
+        android:layout_marginStart="8dp" />
+
+</LinearLayout>

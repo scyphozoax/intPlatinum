@@ -14,7 +14,8 @@ import string
 from datetime import datetime
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                            QTextEdit, QTextBrowser, QLineEdit, QPushButton, QLabel, QListWidget,
-                           QSplitter, QFileDialog, QMessageBox, QInputDialog, QMenu, QDialog, QSpinBox)
+                           QSplitter, QFileDialog, QMessageBox, QInputDialog, QMenu, QDialog, QSpinBox,
+                           QMenuBar, QAction)
 from PyQt5.QtGui import QColor, QTextCursor, QPixmap, QIcon, QFont, QTextDocument
 from PyQt5.QtCore import Qt, QSize, pyqtSignal, QThread, QBuffer, QIODevice, QUrl
 
@@ -28,11 +29,13 @@ for dir_path in ['chat_files/text', 'chat_files/images']:
 class ChatClient(QThread):
     message_received = pyqtSignal(dict)
     connection_error = pyqtSignal(str)
-    # 版本相关信号
     version_mismatch = pyqtSignal(str)
+    connection_success = pyqtSignal()
+    banned_signal = pyqtSignal(str)
+    server_shutdown_signal = pyqtSignal(str)
     
     # 定义客户端版本
-    CLIENT_VERSION = "v1.0.1b"
+    CLIENT_VERSION = "v1.0.2a"
     
     def __init__(self, host, port, username):
         super().__init__()
@@ -106,7 +109,7 @@ class ChatClient(QThread):
             print(f"已发送版本信息: {version_data} ({len(version_bytes)} bytes)")
             
             # 等待服务器版本验证响应 - 先接收4字节的消息头
-            header_data = self.client_socket.recv(4)
+            header_data = self.receive_all(self.client_socket, 4)
             if not header_data:
                 self.connection_error.emit("服务器未响应版本验证")
                 self.client_socket.close()
@@ -138,8 +141,12 @@ class ChatClient(QThread):
             # 检查版本验证响应
             if version_response.get('type') == 'version_mismatch':
                 # 版本不匹配
-                required_version = version_response.get('required_version', '未知版本')
-                self.version_mismatch.emit(required_version)
+                supported_versions = version_response.get('supported_versions', [])
+                if supported_versions:
+                    version_info = ', '.join(supported_versions)
+                else:
+                    version_info = '未知版本'
+                self.version_mismatch.emit(version_info)
                 self.client_socket.close()
                 return False
             elif version_response.get('type') != 'version_accepted':
@@ -158,7 +165,7 @@ class ChatClient(QThread):
             print(f"已发送用户名信息: {username_data} ({len(username_bytes)} bytes)")
             
             # 等待服务器响应 - 先接收4字节的消息头
-            header_data = self.client_socket.recv(4)
+            header_data = self.receive_all(self.client_socket, 4)
             if not header_data:
                 self.connection_error.emit("服务器未响应")
                 self.client_socket.close()
@@ -176,6 +183,7 @@ class ChatClient(QThread):
                 
             # 解码并解析JSON
             message = json.loads(msg_data.decode('utf-8'))
+            print(f"收到服务器响应: {message}")
             
             # 检查响应类型
             if message.get('type') == 'error':
@@ -183,13 +191,19 @@ class ChatClient(QThread):
                 self.connection_error.emit(message.get('content', '连接错误'))
                 self.client_socket.close()
                 return False
+            elif message.get('type') == 'banned':
+                # IP被封禁
+                self.banned_signal.emit(json.dumps(message))
+                self.client_socket.close()
+                return False
             elif message.get('type') == 'connected':
                 # 连接成功
+                print(f"连接成功确认，设置connected=True")
                 self.connected = True
                 return True
             else:
                 # 未知响应
-                self.connection_error.emit("未知的服务器响应")
+                self.connection_error.emit(f"未知的服务器响应: {message}")
                 self.client_socket.close()
                 return False
         except socket.timeout:
@@ -208,20 +222,36 @@ class ChatClient(QThread):
     def run(self):
         if not self.connect_to_server():
             return
+        
+        # 连接成功，发送信号
+        self.connection_success.emit()
             
         try:
             while self.connected:
-                header_data = self.client_socket.recv(4)
+                header_data = self.receive_all(self.client_socket, 4)
                 if not header_data:
                     break
                     
                 msg_len = struct.unpack('!I', header_data)[0]
-                data = self.recv_all(msg_len)
+                data = self.receive_all(self.client_socket, msg_len)
                 
                 if not data:
                     break
                     
                 message = json.loads(data.decode('utf-8'))
+                
+                # 检查是否收到封禁消息
+                if message.get('type') == 'banned':
+                    self.banned_signal.emit(json.dumps(message))
+                    self.connected = False
+                    break
+                
+                # 检查是否收到服务器关闭消息
+                if message.get('type') == 'server_shutdown':
+                    self.server_shutdown_signal.emit(json.dumps(message))
+                    self.connected = False
+                    break
+                
                 self.message_received.emit(message)
                 
         except Exception as e:
@@ -533,44 +563,47 @@ class ChatWindow(QMainWindow):
                     self.show_message("提示", "昵称不能为空，请重新输入！", QMessageBox.Warning)
                     continue
                 
-                # 尝试连接服务器
-                if self.try_connect_to_server():
-                    # 连接成功
-                    self.setWindowTitle(f"intPlatinum - {self.username}")
-                    # 保存当前配置
-                    self.config_manager.save_config(self.server_host, self.server_port, self.username)
-                    break
-                else:
-                    # 连接失败，询问用户是否重试
-                    if not self.ask_retry_connection():
-                        self.close()
-                        return
+                # 尝试连接服务器（异步）
+                self.try_connect_to_server()
+                break  # 连接已启动，退出循环
             else:
                 self.close()
                 return
                 
     def try_connect_to_server(self):
-        """尝试连接到服务器，返回连接是否成功"""
+        """尝试连接到服务器，启动异步连接"""
         try:
             self.client = ChatClient(self.server_host, self.server_port, self.username)
             self.client.message_received.connect(self.handle_message)
             self.client.connection_error.connect(self.handle_connection_error)
             self.client.version_mismatch.connect(self.show_version_error)
+            self.client.connection_success.connect(self.handle_connection_success)
+            self.client.banned_signal.connect(self.handle_banned)
+            self.client.server_shutdown_signal.connect(self.handle_server_shutdown)
             
-            # 直接调用connect_to_server方法尝试连接
-            if self.client.connect_to_server():
-                # 连接成功，开始接收消息线程
-                self.client.start()
-                return True
-            else:
-                return False
+            # 启动连接线程，避免阻塞主线程
+            self.client.start()
+            return True
         except Exception as e:
             self.show_message("连接错误", f"连接服务器时发生错误: {e}", QMessageBox.Critical)
             return False
             
     def handle_connection_error(self, error_message):
-        """处理连接错误，不直接显示错误对话框"""
+        """处理连接错误"""
         self.connection_error_message = error_message
+        # 询问用户是否重试连接
+        if self.ask_retry_connection():
+            # 用户选择重试，重新获取昵称并连接
+            self.attempt_connection_with_nickname(self.username)
+        else:
+            self.close()
+        
+    def handle_connection_success(self):
+        """处理连接成功"""
+        # 连接成功
+        self.setWindowTitle(f"intPlatinum - {self.username}")
+        # 保存当前配置
+        self.config_manager.save_config(self.server_host, self.server_port, self.username)
         
     def ask_retry_connection(self):
         """询问用户是否重试连接"""
@@ -613,6 +646,9 @@ class ChatWindow(QMainWindow):
         
         # 初始化暗黑模式状态 - 默认使用暗黑模式
         self.is_dark_mode = True
+        
+        # 创建菜单栏
+        self.create_menu_bar()
         
         # 主布局
         main_widget = QWidget()
@@ -686,6 +722,53 @@ class ChatWindow(QMainWindow):
         
         # 应用暗黑模式样式
         self.apply_dark_mode()
+        
+    def create_menu_bar(self):
+        """创建菜单栏"""
+        menubar = self.menuBar()
+        
+        # 菜单
+        help_menu = menubar.addMenu('关于')
+        
+        # 关于菜单项
+        about_action = QAction('关于', self)
+        about_action.triggered.connect(self.show_about_dialog)
+        help_menu.addAction(about_action)
+        
+        # 设置菜单栏样式
+        menubar.setStyleSheet("""
+            QMenuBar {
+                background-color: #2c2c2c;
+                color: #ffffff;
+                border-bottom: 1px solid #555555;
+                padding: 4px;
+            }
+            QMenuBar::item {
+                background-color: transparent;
+                padding: 8px 12px;
+                border-radius: 4px;
+            }
+            QMenuBar::item:selected {
+                background-color: #4c4c4c;
+            }
+            QMenu {
+                background-color: #3c3c3c;
+                color: #ffffff;
+                border: 1px solid #555555;
+                border-radius: 5px;
+            }
+            QMenu::item {
+                padding: 8px 20px;
+            }
+            QMenu::item:selected {
+                background-color: #4c4c4c;
+            }
+        """)
+        
+    def show_about_dialog(self):
+        """显示关于对话框"""
+        dialog = AboutDialog(self)
+        dialog.exec_()
         
     def apply_dark_mode(self):
         """应用暗黑模式样式"""
@@ -869,12 +952,102 @@ class ChatWindow(QMainWindow):
             # 保存到本地
             self.save_text_message(self.username, message)
     
+    def is_valid_image_file(self, file_path):
+        """验证文件是否为有效的图片文件（多重验证机制）"""
+        try:
+            # 1. 检查文件大小限制（最大10MB）
+            file_size = os.path.getsize(file_path)
+            max_size = 10 * 1024 * 1024  # 10MB
+            if file_size > max_size:
+                print(f"文件过大: {file_size} bytes > {max_size} bytes")
+                return False
+            
+            # 2. 检查文件头魔数
+            with open(file_path, 'rb') as f:
+                header = f.read(32)  # 读取前32字节用于更准确的检查
+                
+            # 支持的图片格式及其魔数
+            valid_formats = {
+                'PNG': b'\x89PNG\r\n\x1a\n',
+                'JPEG': b'\xff\xd8\xff',
+                'GIF87a': b'GIF87a',
+                'GIF89a': b'GIF89a',
+                'BMP': b'BM',
+                'WEBP': b'RIFF'
+            }
+            
+            detected_format = None
+            for format_name, magic in valid_formats.items():
+                if header.startswith(magic):
+                    if format_name == 'WEBP' and b'WEBP' not in header[:16]:
+                        continue
+                    detected_format = format_name
+                    break
+            
+            if not detected_format:
+                print("未检测到有效的图片文件头")
+                return False
+            
+            # 3. 使用PIL库验证图片完整性
+            try:
+                from PIL import Image
+                with Image.open(file_path) as img:
+                    # 验证图片可以正常加载
+                    img.verify()
+                    
+                # 重新打开图片进行格式验证（verify后图片对象会被关闭）
+                with Image.open(file_path) as img:
+                    # 检查图片格式是否与文件头一致
+                    pil_format = img.format
+                    if pil_format not in ['PNG', 'JPEG', 'GIF', 'BMP', 'WEBP']:
+                        print(f"不支持的图片格式: {pil_format}")
+                        return False
+                    
+                    # 检查图片尺寸是否合理（防止恶意构造的超大尺寸图片）
+                    width, height = img.size
+                    max_dimension = 8192  # 最大8K分辨率
+                    if width > max_dimension or height > max_dimension:
+                        print(f"图片尺寸过大: {width}x{height}")
+                        return False
+                        
+            except ImportError:
+                print("警告: 未安装PIL库，跳过深度验证")
+                # 如果没有PIL库，只进行基础的文件头检查
+                pass
+            except Exception as pil_error:
+                print(f"PIL验证失败: {pil_error}")
+                return False
+            
+            # 4. 检查文件扩展名与内容的一致性
+            file_ext = os.path.splitext(file_path)[1].lower()
+            valid_extensions = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp']
+            if file_ext not in valid_extensions:
+                print(f"不支持的文件扩展名: {file_ext}")
+                return False
+            
+            print(f"文件验证通过: {detected_format} 格式")
+            return True
+            
+        except Exception as e:
+            print(f"文件验证错误: {e}")
+            return False
+    
     def send_file(self, file_type):
         """发送文件（图片）功能"""
         if file_type == 'images':
-            file_path, _ = QFileDialog.getOpenFileName(self, "选择图片", "", "图片文件 (*.png *.jpg *.jpeg *.gif)")
+            file_path, _ = QFileDialog.getOpenFileName(self, "选择图片", "", "图片文件 (*.png *.jpg *.jpeg *.gif *.bmp *.webp)")
 
         if not file_path:
+            return
+            
+        # 验证文件是否为真正的图片文件
+        if file_type == 'images' and not self.is_valid_image_file(file_path):
+            QMessageBox.warning(self, "文件验证失败", 
+                              "文件验证失败！请确保：\n"
+                              "• 文件是有效的图片格式（PNG、JPEG、GIF、BMP、WebP）\n"
+                              "• 文件大小不超过10MB\n"
+                              "• 图片尺寸不超过8192x8192像素\n"
+                              "• 文件扩展名与实际内容一致")
             return
             
         # 获取原始文件名
@@ -882,9 +1055,9 @@ class ChatWindow(QMainWindow):
             
         try:
             if self.client.send_file(file_path, file_type):
-                # 发送成功后立即在本地显示图片
-                # 注意：由于我们在ChatClient的send_file方法中处理了文件名混淆，
-                # 服务器会转发混淆后的文件名，但我们在本地显示时仍然使用原始文件名
+                # 发送成功后保存文件到本地并显示
+                self.save_file(self.username, file_path, file_type)
+                # 使用原始文件名显示
                 self.display_file_message(self.username, file_type, original_file_name, original_file_name)
             else:
                 # 文件发送失败
@@ -957,6 +1130,14 @@ class ChatWindow(QMainWindow):
         elif msg_type == 'user_list':
             users = message.get('users', [])
             self.update_user_list(users)
+            
+        elif msg_type == 'popup_message':
+            content = message.get('content')
+            self.show_popup_message(content)
+            
+        elif msg_type == 'popup_announcement':
+            content = message.get('content')
+            self.show_popup_announcement(content)
     
     def display_text_message(self, sender, content, timestamp=None):
         cursor = self.chat_display.textCursor()
@@ -1158,9 +1339,9 @@ class ChatWindow(QMainWindow):
         """)
         msg_box.exec_()
         
-    def show_version_error(self, required_version):
+    def show_version_error(self, supported_versions):
         """显示版本不匹配错误，并关闭程序"""
-        error_message = f"当前客户端版本不匹配\n\n服务器要求的版本: {required_version}\n当前客户端版本: {ChatClient.CLIENT_VERSION}\n\n请更新客户端后再试。"
+        error_message = f"当前客户端版本不匹配\n\n服务器支持的版本: {supported_versions}\n当前客户端版本: {ChatClient.CLIENT_VERSION}\n\n请更新客户端后再试。"
         
         msg_box = QMessageBox()
         msg_box.setWindowTitle("版本不匹配")
@@ -1177,9 +1358,153 @@ class ChatWindow(QMainWindow):
         
         # 版本不匹配时，退出程序
         sys.exit(0)
-        
-
     
+    def handle_banned(self, message):
+        """处理被封禁信号，显示弹窗并关闭程序"""
+        # 解析和清理封禁消息，提供更友好的用户体验
+        clean_message = self._parse_banned_message(message)
+        
+        msg_box = QMessageBox()
+        msg_box.setWindowTitle("访问受限")
+        msg_box.setText(f"🚫 {clean_message}\n\n如有疑问，请联系服务器管理员。\n\n点击确定关闭intPlatinum。")
+        msg_box.setIcon(QMessageBox.Warning)
+        msg_box.setStyleSheet("""
+            QMessageBox { 
+                background-color: #2c2c2c; 
+                color: #ffffff; 
+                min-width: 450px;
+                border-radius: 8px;
+            }
+            QLabel { 
+                color: #ffffff; 
+                font-size: 14px; 
+                padding: 15px;
+                line-height: 1.4;
+            }
+            QPushButton { 
+                background-color: #d32f2f; 
+                color: #ffffff; 
+                border: none; 
+                padding: 12px 24px; 
+                border-radius: 6px; 
+                font-size: 14px; 
+                font-weight: bold;
+                min-height: 36px;
+                min-width: 80px;
+            }
+            QPushButton:hover { 
+                background-color: #f44336; 
+            }
+            QPushButton:pressed { 
+                background-color: #b71c1c; 
+            }
+        """)
+        msg_box.exec_()
+        
+        # 被封禁时，退出程序
+        sys.exit(0)
+    
+    def handle_server_shutdown(self, message):
+        """处理服务器关闭信号，显示弹窗并关闭程序"""
+        msg_box = QMessageBox()
+        msg_box.setWindowTitle("服务器通知")
+        msg_box.setText("服务器已关闭\n\n连接已断开，程序将退出。")
+        msg_box.setIcon(QMessageBox.Information)
+        msg_box.setStyleSheet("""
+            QMessageBox { 
+                background-color: #2c2c2c; 
+                color: #ffffff; 
+                min-width: 400px;
+                border-radius: 8px;
+            }
+            QLabel { 
+                color: #ffffff; 
+                font-size: 14px; 
+                padding: 15px;
+                line-height: 1.4;
+            }
+            QPushButton { 
+                background-color: #555555; 
+                color: #ffffff; 
+                border: none; 
+                padding: 12px 24px; 
+                border-radius: 6px; 
+                font-size: 14px; 
+                font-weight: bold;
+                min-height: 36px;
+                min-width: 80px;
+            }
+            QPushButton:hover { 
+                background-color: #666666; 
+            }
+            QPushButton:pressed { 
+                background-color: #777777; 
+            }
+        """)
+        msg_box.exec_()
+        
+        # 服务器关闭时，退出程序
+        sys.exit(0)
+    
+    def _parse_banned_message(self, message):
+        """解析封禁消息，提取有用信息并格式化为用户友好的文本"""
+        try:
+            # 尝试解析JSON格式的消息
+            if message.startswith('{') and message.endswith('}'):
+                import json
+                parsed = json.loads(message)
+                if 'content' in parsed:
+                    return parsed['content']
+                elif 'type' in parsed and parsed['type'] == 'banned':
+                    return "您的IP地址已被该服务器封禁"
+            
+            # 如果消息包含技术性内容，提取关键信息
+            if 'banned' in message.lower():
+                return "您的IP地址已被该服务器封禁"
+            elif 'ip' in message.lower() and ('禁' in message or 'ban' in message.lower()):
+                return "您的IP地址已被该服务器封禁"
+            
+            # 如果是普通文本消息，直接返回
+            return message
+            
+        except Exception:
+            # 解析失败时返回默认消息
+            return "您已被该服务器封禁"
+    
+    def show_popup_message(self, content):
+        """显示弹窗消息"""
+        msg_box = QMessageBox()
+        msg_box.setWindowTitle("服务器消息")
+        msg_box.setText(content)
+        msg_box.setIcon(QMessageBox.Information)
+        msg_box.setStyleSheet("""
+            QMessageBox { background-color: #2c2c2c; color: #ffffff; min-width: 400px; }
+            QLabel { color: #ffffff; font-size: 14px; padding: 10px; }
+            QPushButton { background-color: #555555; color: #ffffff; border: none; padding: 10px 20px; border-radius: 6px; font-size: 14px; min-height: 32px; }
+            QPushButton:hover { background-color: #666666; }
+            QPushButton:pressed { background-color: #777777; }
+        """)
+        msg_box.exec_()
+    
+    def show_popup_announcement(self, content):
+        """显示弹窗公告"""
+        msg_box = QMessageBox()
+        msg_box.setWindowTitle("服务器公告")
+        msg_box.setText(content)
+        msg_box.setIcon(QMessageBox.Information)
+        
+        # 自定义按钮文本
+        msg_box.addButton("我已了解", QMessageBox.AcceptRole)
+        
+        msg_box.setStyleSheet("""
+            QMessageBox { background-color: #2c2c2c; color: #ffffff; min-width: 400px; }
+            QLabel { color: #ffffff; font-size: 14px; padding: 10px; }
+            QPushButton { background-color: #555555; color: #ffffff; border: none; padding: 10px 20px; border-radius: 6px; font-size: 14px; min-height: 32px; }
+            QPushButton:hover { background-color: #666666; }
+            QPushButton:pressed { background-color: #777777; }
+        """)
+        msg_box.exec_()
+
     def closeEvent(self, event):
         """关闭窗口事件处理，使用暗黑模式样式的确认对话框"""
         msg_box = QMessageBox()
@@ -1197,7 +1522,8 @@ class ChatWindow(QMainWindow):
         """)
         
         if msg_box.exec_() == QMessageBox.Yes:
-            self.client.disconnect()
+            if self.client is not None:
+                self.client.disconnect()
             event.accept()
         else:
             event.ignore()
@@ -1239,6 +1565,79 @@ class UserInfoDialog(QDialog):
         
         layout.addWidget(avatar_label, alignment=Qt.AlignCenter)
         layout.addWidget(info_label)
+        layout.addLayout(button_container)
+        
+        # 设置暗黑模式样式
+        self.setStyleSheet(".QDialog {background-color: #2c2c2c;}")
+
+class AboutDialog(QDialog):
+    """关于对话框"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("关于 intPlatinum")
+        self.setMinimumWidth(450)
+        self.setFixedHeight(350)
+        
+        # 创建布局
+        layout = QVBoxLayout(self)
+        layout.setSpacing(20)
+        layout.setContentsMargins(30, 30, 30, 30)
+        
+        # 软件名称
+        title_label = QLabel("intPlatinum")
+        title_label.setAlignment(Qt.AlignCenter)
+        title_label.setStyleSheet("color: #ffffff; font-size: 24px; font-weight: bold; margin-bottom: 10px;")
+        
+        # 版本信息
+        version_label = QLabel(f"版本: {ChatClient.CLIENT_VERSION}")
+        version_label.setAlignment(Qt.AlignCenter)
+        version_label.setStyleSheet("color: #cccccc; font-size: 16px; margin-bottom: 20px;")
+        
+        # 开发信息和协议说明
+        info_text = (
+            "由Studio ScyphozoaX开发的Vanilla版本（原版）。\n\n"
+            "根据GPL v3协议，允许进行对软件源代码的二次分发和修改，"
+            "但修改后的版本必须公开源代码。\n\n"
+            "关于intPlatinum的Vanilla版本的更多详情，请查阅:\n"
+            "https://scy.la/intplatinum/"
+        )
+        
+        info_label = QLabel(info_text)
+        info_label.setAlignment(Qt.AlignLeft)
+        info_label.setWordWrap(True)
+        info_label.setStyleSheet("color: #ffffff; font-size: 14px; line-height: 1.6; padding: 15px; background-color: #3c3c3c; border-radius: 8px;")
+        
+        # 关闭按钮
+        close_button = QPushButton("确定")
+        close_button.clicked.connect(self.accept)
+        close_button.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                padding: 12px 30px;
+                border-radius: 6px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:pressed {
+                background-color: #3d8b40;
+            }
+        """)
+        close_button.setMinimumHeight(40)
+        
+        # 创建按钮容器布局，使按钮居中
+        button_container = QHBoxLayout()
+        button_container.setAlignment(Qt.AlignCenter)
+        button_container.addWidget(close_button)
+        
+        layout.addWidget(title_label)
+        layout.addWidget(version_label)
+        layout.addWidget(info_label)
+        layout.addStretch()
         layout.addLayout(button_container)
         
         # 设置暗黑模式样式

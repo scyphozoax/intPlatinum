@@ -39,8 +39,8 @@ data class Message(
     @SerializedName("version")
     val version: String? = null,
     
-    @SerializedName("required_version")
-    val requiredVersion: String? = null
+    @SerializedName("supported_versions")
+    val supportedVersions: List<String>? = null
 ) {
     companion object {
         // 消息类型常量
@@ -52,6 +52,9 @@ data class Message(
         const val TYPE_ERROR = "error"
         const val TYPE_VERSION_ACCEPTED = "version_accepted"
         const val TYPE_VERSION_MISMATCH = "version_mismatch"
+        const val TYPE_POPUP_MESSAGE = "popup_message"
+        const val TYPE_POPUP_ANNOUNCEMENT = "popup_announcement"
+        const val TYPE_BANNED = "banned"
         
         // 文件类型常量
         const val FILE_TYPE_IMAGES = "images"

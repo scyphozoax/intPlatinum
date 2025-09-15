@@ -30,7 +30,7 @@
     <string name="error_invalid_address">服务器地址格式错误</string>
     <string name="error_username_empty">用户名不能为空</string>
     <string name="error_username_taken">用户名已被使用</string>
-    <string name="error_version_mismatch">客户端版本不兼容，需要版本: %s</string>
+    <string name="error_version_mismatch">客户端版本不兼容，服务器支持的版本: %s</string>
     <string name="error_send_message_failed">消息发送失败</string>
     <string name="error_file_too_large">文件过大，无法发送</string>
     <string name="error_permission_denied">权限被拒绝</string>

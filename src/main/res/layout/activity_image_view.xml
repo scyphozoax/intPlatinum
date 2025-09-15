@@ -47,8 +47,8 @@
 
     </LinearLayout>
 
-    <!-- 图片显示区域 -->
-    <ImageView
+    <!-- 图片显示区域（支持缩放和拖动） -->
+    <com.intplatinum.mv.ui.widget.ZoomableImageView
         android:id="@+id/ivFullImage"
         android:layout_width="match_parent"
         android:layout_height="match_parent"

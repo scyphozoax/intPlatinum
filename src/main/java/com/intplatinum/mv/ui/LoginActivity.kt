@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.intplatinum.mv.R
@@ -77,6 +78,11 @@ class LoginActivity : AppCompatActivity() {
         binding.tvClearSettings.setOnClickListener {
             clearSavedSettings()
         }
+        
+        // 历史地址按钮
+        binding.btnAddressHistory.setOnClickListener {
+            showAddressHistoryDialog()
+        }
     }
     
     private fun clearSavedSettings() {
@@ -86,6 +92,26 @@ class LoginActivity : AppCompatActivity() {
         binding.cbRememberSettings.isChecked = false
         binding.tvClearSettings.visibility = View.GONE
         Toast.makeText(this, "已清除保存的设置", Toast.LENGTH_SHORT).show()
+    }
+    
+    private fun showAddressHistoryDialog() {
+        val savedAddresses = connectionPreferences.getSavedAddresses()
+        
+        if (savedAddresses.isEmpty()) {
+            Toast.makeText(this, "暂无保存的地址", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        val addressArray = savedAddresses.toTypedArray()
+        
+        AlertDialog.Builder(this, R.style.AlertDialogTheme)
+            .setTitle("选择服务器地址")
+            .setItems(addressArray) { _, which ->
+                val selectedAddress = addressArray[which]
+                binding.etServerAddress.setText(selectedAddress)
+            }
+            .setNegativeButton("取消", null)
+            .show()
     }
 
     private fun connectToServer() {
@@ -137,6 +163,9 @@ class LoginActivity : AppCompatActivity() {
                 if (success) {
                     showLoading(false)
                     Log.d("LoginActivity", "连接成功，跳转到主界面")
+                    
+                    // 保存服务器地址到历史记录
+                    connectionPreferences.saveServerAddress(serverAddress)
                     
                     // 如果勾选了记住设置，保存连接设置
                     if (binding.cbRememberSettings.isChecked) {

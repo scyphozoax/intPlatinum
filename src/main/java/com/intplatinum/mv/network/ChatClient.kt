@@ -25,7 +25,7 @@ import java.nio.ByteOrder
 class ChatClient(private val context: Context) {
     companion object {
         private const val TAG = "ChatClient"
-        private const val CLIENT_VERSION = "1.0.0-mv"
+        private const val CLIENT_VERSION = "v1.0.1a-mv"
         private const val BUFFER_SIZE = 8192
         private const val CONNECTION_TIMEOUT = 10000 // 10秒连接超时
         private const val READ_TIMEOUT = 60000 // 60秒读取超时，避免因网络延迟导致断开
@@ -59,6 +59,8 @@ class ChatClient(private val context: Context) {
         fun onMessageReceived(message: Message)
         fun onError(error: String)
         fun onVersionMismatch(requiredVersion: String)
+        fun onBanned(message: String)
+        fun onServerShutdown(message: String)
     }
     
     private var listener: ChatClientListener? = null
@@ -192,9 +194,17 @@ class ChatClient(private val context: Context) {
                     true
                 }
                 Message.TYPE_VERSION_MISMATCH -> {
-                    Log.e(TAG, "版本不匹配，需要版本: ${response.requiredVersion}")
+                    val supportedVersions = response.supportedVersions?.joinToString(", ") ?: "未知版本"
+                    Log.e(TAG, "版本不匹配，服务器支持的版本: $supportedVersions")
                     withContext(Dispatchers.Main) {
-                        listener?.onVersionMismatch(response.requiredVersion ?: "未知版本")
+                        listener?.onVersionMismatch(supportedVersions)
+                    }
+                    false
+                }
+                Message.TYPE_BANNED -> {
+                    Log.w(TAG, "在版本验证阶段收到封禁消息: ${response.content}")
+                    withContext(Dispatchers.Main) {
+                        listener?.onBanned(response.content ?: "您已被该服务器封禁")
                     }
                     false
                 }
@@ -249,6 +259,13 @@ class ChatClient(private val context: Context) {
                     }
                     false
                 }
+                Message.TYPE_BANNED -> {
+                    Log.w(TAG, "在用户名验证阶段收到封禁消息: ${response.content}")
+                    withContext(Dispatchers.Main) {
+                        listener?.onBanned(response.content ?: "您已被该服务器封禁")
+                    }
+                    false
+                }
                 else -> {
                     Log.e(TAG, "用户名验证失败: $response")
                     withContext(Dispatchers.Main) {
@@ -283,6 +300,26 @@ class ChatClient(private val context: Context) {
                         if (message.type == "heartbeat" || message.type == "pong") {
                             Log.v(TAG, "收到心跳包响应")
                             continue // 心跳包不需要传递给UI层
+                        }
+                        
+                        // 处理封禁消息
+                        if (message.type == Message.TYPE_BANNED) {
+                            Log.w(TAG, "收到封禁消息: ${message.content}")
+                            isConnected = false
+                            withContext(Dispatchers.Main) {
+                                listener?.onBanned(message.content ?: "您已被该服务器封禁")
+                            }
+                            break // 退出接收循环
+                        }
+                        
+                        // 处理服务器关闭消息
+                        if (message.type == "server_shutdown") {
+                            Log.w(TAG, "收到服务器关闭消息: ${message.content}")
+                            isConnected = false
+                            withContext(Dispatchers.Main) {
+                                listener?.onServerShutdown(message.content ?: "服务器已关闭")
+                            }
+                            break // 退出接收循环
                         }
                         
                         // 转换为ChatMessage并发送到Flow

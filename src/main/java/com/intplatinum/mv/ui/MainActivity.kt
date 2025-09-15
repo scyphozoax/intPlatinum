@@ -149,6 +149,18 @@ class MainActivity : AppCompatActivity() {
                         e.printStackTrace()
                     }
                 }
+                // 处理弹窗消息
+                else if (message.type == com.intplatinum.mv.data.Message.TYPE_POPUP_MESSAGE) {
+                    runOnUiThread {
+                        showPopupMessage(message.content ?: "")
+                    }
+                }
+                // 处理弹窗公告
+                else if (message.type == com.intplatinum.mv.data.Message.TYPE_POPUP_ANNOUNCEMENT) {
+                    runOnUiThread {
+                        showPopupAnnouncement(message.content ?: "")
+                    }
+                }
             }
 
             override fun onError(error: String) {
@@ -162,12 +174,32 @@ class MainActivity : AppCompatActivity() {
                     Toast.makeText(this@MainActivity, "版本不匹配，需要版本: $requiredVersion", Toast.LENGTH_LONG).show()
                 }
             }
+
+            override fun onBanned(message: String) {
+                runOnUiThread {
+                    showBannedDialog(message)
+                }
+            }
+            
+            override fun onServerShutdown(message: String) {
+                runOnUiThread {
+                    showServerShutdownDialog(message)
+                }
+            }
         })
     }
 
     private fun setupClickListeners() {
         // 返回按钮
         binding.btnBack.setOnClickListener {
+            // 断开连接并返回到输入地址和昵称页面
+            if (::chatClient.isInitialized) {
+                chatClient.disconnect()
+            }
+            // 启动LoginActivity并清除任务栈
+            val intent = Intent(this, LoginActivity::class.java)
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            startActivity(intent)
             finish()
         }
 
@@ -178,7 +210,8 @@ class MainActivity : AppCompatActivity() {
         
         // 设置按钮
         binding.btnSettings.setOnClickListener {
-            showCacheManagementDialog()
+            val intent = Intent(this, SettingsActivity::class.java)
+            startActivity(intent)
         }
 
         // 发送按钮
@@ -489,6 +522,96 @@ class MainActivity : AppCompatActivity() {
                     Toast.makeText(this@MainActivity, message, Toast.LENGTH_LONG).show()
                 }
             }
+            .show()
+    }
+    
+    /**
+     * 显示弹窗消息
+     */
+    private fun showPopupMessage(content: String) {
+        AlertDialog.Builder(this, R.style.AlertDialogTheme)
+            .setTitle("服务器消息")
+            .setMessage(content)
+            .setIcon(android.R.drawable.ic_dialog_info)
+            .setPositiveButton("确定", null)
+            .show()
+    }
+    
+    /**
+     * 显示弹窗公告
+     */
+    private fun showPopupAnnouncement(content: String) {
+        AlertDialog.Builder(this, R.style.AlertDialogTheme)
+            .setTitle("服务器公告")
+            .setMessage(content)
+            .setIcon(android.R.drawable.ic_dialog_info)
+            .setPositiveButton("我已了解", null)
+            .show()
+    }
+
+    private fun showBannedDialog(message: String) {
+        // 解析和清理封禁消息，提供更友好的用户体验
+        val cleanMessage = parseBannedMessage(message)
+        
+        AlertDialog.Builder(this, R.style.AlertDialogTheme)
+            .setTitle("🚫 访问受限")
+            .setMessage("$cleanMessage\n\n如有疑问，请联系服务器管理员。\n\n点击确定退出intPlatinum。")
+            .setIcon(android.R.drawable.ic_dialog_alert)
+            .setPositiveButton("确定") { dialog, _ ->
+                dialog.dismiss()
+                // 断开连接
+                if (::chatClient.isInitialized) {
+                    chatClient.disconnect()
+                }
+                // 返回到输入地址和昵称页面
+                val intent = Intent(this, LoginActivity::class.java)
+                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                startActivity(intent)
+                finish()
+            }
+            .setCancelable(false)
+            .show()
+    }
+    
+    /**
+     * 解析封禁消息，提取有用信息并格式化为用户友好的文本
+     */
+    private fun parseBannedMessage(message: String): String {
+        return try {
+            // 尝试解析JSON格式的消息
+            if (message.startsWith("{") && message.endsWith("}")) {
+                val jsonObject = org.json.JSONObject(message)
+                if (jsonObject.has("content")) {
+                    return jsonObject.getString("content")
+                } else if (jsonObject.has("type") && jsonObject.getString("type") == "banned") {
+                    return "您的IP地址已被该服务器封禁"
+                }
+            }
+            
+            // 如果消息包含技术性内容，提取关键信息
+            when {
+                message.lowercase().contains("banned") -> "您的IP地址已被该服务器封禁"
+                message.lowercase().contains("ip") && (message.contains("禁") || message.lowercase().contains("ban")) -> "您的IP地址已被该服务器封禁"
+                else -> message // 如果是普通文本消息，直接返回
+            }
+        } catch (e: Exception) {
+            // 解析失败时返回默认消息
+            "您已被该服务器封禁"
+        }
+    }
+    
+    private fun showServerShutdownDialog(message: String) {
+        AlertDialog.Builder(this, R.style.AlertDialogTheme)
+            .setTitle("服务器关闭")
+            .setMessage("服务器已关闭，请稍后再试")
+            .setPositiveButton("确定") { _, _ ->
+                // 返回到输入地址和昵称页面
+                val intent = Intent(this, LoginActivity::class.java)
+                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                startActivity(intent)
+                finish()
+            }
+            .setCancelable(false)
             .show()
     }
 }

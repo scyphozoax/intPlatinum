@@ -1,6 +1,7 @@
 package com.intplatinum.mv.ui
 
 import android.content.ContentValues
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
@@ -9,7 +10,9 @@ import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.bumptech.glide.Glide
+import com.intplatinum.mv.R
 import com.intplatinum.mv.databinding.ActivityImageViewBinding
+import com.intplatinum.mv.ui.widget.ZoomableImageView
 import java.io.File
 import java.io.FileInputStream
 
@@ -33,14 +36,25 @@ class ImageViewActivity : AppCompatActivity() {
             // 设置标题
             binding.tvTitle.text = if (senderName != null) "来自 $senderName 的图片" else "图片详情"
             
-            // 加载图片
+            // 加载图片到可缩放的ImageView
+            // 支持文件路径和URI格式
+            val imageSource = if (imagePath.startsWith("content://") || imagePath.startsWith("file://")) {
+                // URI格式，直接使用
+                imagePath
+            } else {
+                // 文件路径格式，转换为File对象
+                File(imagePath)
+            }
+            
             Glide.with(this)
-                .load(File(imagePath))
+                .load(imageSource)
+                .placeholder(R.drawable.ic_attach_file)
+                .error(R.drawable.ic_attach_file)
                 .into(binding.ivFullImage)
                 
-            // 设置点击事件关闭Activity
+            // 设置点击事件切换UI显示/隐藏
             binding.ivFullImage.setOnClickListener {
-                finish()
+                toggleUIVisibility()
             }
             
             // 设置返回按钮
@@ -57,11 +71,43 @@ class ImageViewActivity : AppCompatActivity() {
         }
     }
     
+    /**
+     * 切换UI显示/隐藏状态
+     */
+    private fun toggleUIVisibility() {
+        val isVisible = binding.layoutHeader.visibility == View.VISIBLE
+        binding.layoutHeader.visibility = if (isVisible) View.GONE else View.VISIBLE
+        
+        // 同时切换状态栏显示
+        if (isVisible) {
+            // 隐藏状态栏，进入沉浸式模式
+            window.decorView.systemUiVisibility = (
+                View.SYSTEM_UI_FLAG_FULLSCREEN
+                or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            )
+        } else {
+            // 显示状态栏
+            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
+        }
+    }
+    
     private fun downloadImage(imagePath: String) {
         try {
-            val sourceFile = File(imagePath)
-            if (!sourceFile.exists()) {
-                Toast.makeText(this, "图片文件不存在", Toast.LENGTH_SHORT).show()
+            // 处理URI格式的图片路径
+            val inputStream = if (imagePath.startsWith("content://")) {
+                contentResolver.openInputStream(android.net.Uri.parse(imagePath))
+            } else {
+                val sourceFile = File(imagePath)
+                if (!sourceFile.exists()) {
+                    Toast.makeText(this, "图片文件不存在", Toast.LENGTH_SHORT).show()
+                    return
+                }
+                FileInputStream(sourceFile)
+            }
+            
+            if (inputStream == null) {
+                Toast.makeText(this, "无法读取图片文件", Toast.LENGTH_SHORT).show()
                 return
             }
             
@@ -78,8 +124,8 @@ class ImageViewActivity : AppCompatActivity() {
                 val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
                 uri?.let {
                     contentResolver.openOutputStream(it)?.use { outputStream ->
-                        FileInputStream(sourceFile).use { inputStream ->
-                            inputStream.copyTo(outputStream)
+                        inputStream.use { input ->
+                            input.copyTo(outputStream)
                         }
                     }
                     Toast.makeText(this, "图片已保存到相册", Toast.LENGTH_SHORT).show()
@@ -95,9 +141,9 @@ class ImageViewActivity : AppCompatActivity() {
                 }
                 val destFile = File(chatImagesDir, fileName)
                 
-                FileInputStream(sourceFile).use { inputStream ->
+                inputStream.use { input ->
                     destFile.outputStream().use { outputStream ->
-                        inputStream.copyTo(outputStream)
+                        input.copyTo(outputStream)
                     }
                 }
                 

@@ -8,14 +8,6 @@
     android:gravity="center"
     android:padding="24dp">
 
-    <!-- Logo区域 -->
-    <ImageView
-        android:layout_width="120dp"
-        android:layout_height="120dp"
-        android:layout_marginBottom="32dp"
-        android:src="@drawable/ic_launcher"
-        android:contentDescription="@string/app_name" />
-
     <!-- 应用标题 -->
     <TextView
         android:layout_width="wrap_content"
@@ -26,32 +18,52 @@
         android:textSize="28sp"
         android:textStyle="bold" />
 
-    <!-- 服务器地址输入 -->
-    <com.google.android.material.textfield.TextInputLayout
+    <!-- 服务器地址输入区域 -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginBottom="16dp"
-        android:hint="@string/server_address"
-        app:boxBackgroundColor="@color/surface_variant_dark"
-        app:boxBackgroundMode="filled"
-        app:boxCornerRadiusBottomEnd="8dp"
-        app:boxCornerRadiusBottomStart="8dp"
-        app:boxCornerRadiusTopEnd="8dp"
-        app:boxCornerRadiusTopStart="8dp"
-        app:boxStrokeColor="@color/divider_dark"
-        app:hintTextColor="@color/text_hint_dark">
+        android:orientation="horizontal">
 
-        <com.google.android.material.textfield.TextInputEditText
-            android:id="@+id/etServerAddress"
-            android:layout_width="match_parent"
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:hint="@string/server_address_hint"
-            android:inputType="textUri"
-            android:text="localhost:7995"
-            android:textColor="@color/text_primary_dark"
-            android:textColorHint="@color/text_hint_dark" />
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:hint="@string/server_address"
+            app:boxBackgroundColor="@color/surface_variant_dark"
+            app:boxBackgroundMode="filled"
+            app:boxCornerRadiusBottomEnd="8dp"
+            app:boxCornerRadiusBottomStart="8dp"
+            app:boxCornerRadiusTopEnd="8dp"
+            app:boxCornerRadiusTopStart="8dp"
+            app:boxStrokeColor="@color/divider_dark"
+            app:hintTextColor="@color/text_hint_dark">
 
-    </com.google.android.material.textfield.TextInputLayout>
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etServerAddress"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/server_address_hint"
+                android:inputType="textUri"
+                android:text="localhost:7995"
+                android:textColor="@color/text_primary_dark"
+                android:textColorHint="@color/text_hint_dark" />
+
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- 历史地址按钮 -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnAddressHistory"
+            style="@style/Widget.Material3.Button.IconButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_gravity="center_vertical"
+            android:contentDescription="历史地址"
+            app:icon="@drawable/ic_history"
+            app:iconTint="@color/text_primary_dark" />
+
+    </LinearLayout>
 
     <!-- 用户名输入 -->
     <com.google.android.material.textfield.TextInputLayout

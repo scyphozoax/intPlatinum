@@ -53,6 +53,18 @@
             android:screenOrientation="portrait"
             android:theme="@style/Theme.IntPlatinumMV.NoActionBar" />
             
+        <activity
+            android:name=".ui.SettingsActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.IntPlatinumMV.NoActionBar" />
+            
+        <activity
+            android:name=".ui.AboutActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.IntPlatinumMV.NoActionBar" />
+            
     </application>
 
 </manifest>

@@ -3,6 +3,7 @@ package com.intplatinum.mv.ui.adapter
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
@@ -48,9 +49,20 @@ class MessageAdapter(
     
     private fun downloadImageToGallery(context: Context, imagePath: String) {
         try {
-            val sourceFile = File(imagePath)
-            if (!sourceFile.exists()) {
-                Toast.makeText(context, "图片文件不存在", Toast.LENGTH_SHORT).show()
+            // 处理URI格式的图片路径
+            val inputStream = if (imagePath.startsWith("content://")) {
+                context.contentResolver.openInputStream(android.net.Uri.parse(imagePath))
+            } else {
+                val sourceFile = File(imagePath)
+                if (!sourceFile.exists()) {
+                    Toast.makeText(context, "图片文件不存在", Toast.LENGTH_SHORT).show()
+                    return
+                }
+                FileInputStream(sourceFile)
+            }
+            
+            if (inputStream == null) {
+                Toast.makeText(context, "无法读取图片文件", Toast.LENGTH_SHORT).show()
                 return
             }
             
@@ -67,8 +79,8 @@ class MessageAdapter(
                 val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
                 uri?.let {
                     context.contentResolver.openOutputStream(it)?.use { outputStream ->
-                        FileInputStream(sourceFile).use { inputStream ->
-                            inputStream.copyTo(outputStream)
+                        inputStream.use { input ->
+                            input.copyTo(outputStream)
                         }
                     }
                     Toast.makeText(context, "图片已保存到相册", Toast.LENGTH_SHORT).show()
@@ -84,9 +96,9 @@ class MessageAdapter(
                 }
                 val destFile = File(chatImagesDir, fileName)
                 
-                FileInputStream(sourceFile).use { inputStream ->
+                inputStream.use { input ->
                     destFile.outputStream().use { outputStream ->
-                        inputStream.copyTo(outputStream)
+                        input.copyTo(outputStream)
                     }
                 }
                 
@@ -174,10 +186,13 @@ class MessageAdapter(
             binding.ivSentImage.visibility = View.VISIBLE
             binding.tvSentTime.text = dateFormat.format(Date(message.timestamp))
 
-            // 加载图片
+            // 加载图片（优化版本：缩略图+内存优化）
             if (message.filePath != null) {
                 Glide.with(binding.root.context)
                     .load(message.filePath)
+                    .thumbnail(0.1f)  // 先加载10%大小的缩略图
+                    .override(280, 280)  // 限制加载尺寸，防止内存溢出
+                    .centerCrop()
                     .placeholder(R.drawable.ic_attach_file)
                     .error(R.drawable.ic_attach_file)
                     .into(binding.ivSentImage)
@@ -205,10 +220,13 @@ class MessageAdapter(
             binding.ivReceivedImage.visibility = View.VISIBLE
             binding.tvReceivedTime.text = dateFormat.format(Date(message.timestamp))
 
-            // 加载图片
+            // 加载图片（优化版本：缩略图+内存优化）
             if (message.filePath != null) {
                 Glide.with(binding.root.context)
                     .load(message.filePath)
+                    .thumbnail(0.1f)  // 先加载10%大小的缩略图
+                    .override(280, 280)  // 限制加载尺寸，防止内存溢出
+                    .centerCrop()
                     .placeholder(R.drawable.ic_attach_file)
                     .error(R.drawable.ic_attach_file)
                     .into(binding.ivReceivedImage)

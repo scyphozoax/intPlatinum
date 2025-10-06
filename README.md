@@ -23,3 +23,5 @@ intPlatinum 的具体使用方式和说明放置在了单独的文档页面中�
 [PyQt5 on PyPl](https://pypi.org/project/PyQt5/)
 
 [Pillow on PyPl](https://pypi.org/project/Pillow/)
+
+[intPlatinum MV](https://github.com/scyphozoax/intPlatinumMV)
